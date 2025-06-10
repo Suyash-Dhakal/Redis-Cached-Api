@@ -4,6 +4,7 @@ import { redisClient } from '../utils/redisClient.js';
 
 const router = express.Router();
 
+// Route to get all products with caching
 router.get('/', async (req, res)=>{
     try {
 
@@ -26,6 +27,39 @@ router.get('/', async (req, res)=>{
         res.status(200).json(products);
     } catch (error) {
         console.error("Error fetching products:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+})
+
+// Route to add a new product
+router.post('/add-product', async (req,res)=>{
+    try {
+        const { id, name, category, price, stock, rating } = req.body;
+        if (!id || !name || !category || !price || !stock || !rating) {
+            return res.status(400).json({ message: "All fields are required" });
+        }
+        // Check if product already exists
+        const existingProduct = await Product.findOne({ _id: id });
+        if (existingProduct) {
+            return res.status(400).json({ message: "Product already exists" });
+        }
+        // Create a new product
+        const newProduct = new Product({
+            _id: id,
+            name,
+            category,
+            price,
+            stock,
+            rating
+        });
+
+        // Save the product to MongoDB
+        await newProduct.save();
+        // Invalidate the cache
+        await redisClient.del('products');
+        res.status(201).json({ message: "Product added successfully", product: newProduct });
+    } catch (error) {
+        console.error("Error adding product:", error);
         res.status(500).json({ message: "Internal Server Error" });
     }
 })
